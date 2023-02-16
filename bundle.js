@@ -121868,5 +121868,11 @@ async function loadIfc(url) {
     viewer.context.renderer.postProduction.active = true;
 }
 
-window.ondblclick = () => viewer.IFC.selector.pickIfcItem();
 window.onmousemove = () => viewer.IFC.selector.prePickIfcItem();
+
+
+window.ondblclick = async () => {
+  const found = await viewer.IFC.selector.pickIfcItem();
+  const result = await viewer.IFC.loader.ifcManager.getItemProperties(found.modelID, found.id);
+  console.log(result);
+};

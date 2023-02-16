@@ -8,7 +8,7 @@ html, body {
     overflow: hidden;
 }
 
-#viewer-container {
+#viewer-container{
     position: fixed;
     top: 0;
     left: 0;
@@ -17,7 +17,13 @@ html, body {
     height: 100%;
 }
 
-/*Tree view: https://www.w3schools.com/howto/howto_js_treeview.asp*/
+.checkboxes {
+    position: absolute;
+    left: 1rem;
+    top: 1rem;
+}
+
+/*Tree view: https://www.w3schools.com/howto/howto_js_treeview.asp
 
 .ifc-tree-menu {
     position: absolute;
@@ -32,24 +38,24 @@ li ul {
     cursor: pointer;
 }
 
-/* Remove default bullets */
+ Remove default bullets 
 ul, #myUL {
     list-style-type: none;
 }
 
-/* Remove margins and padding from the parent ul */
+Remove margins and padding from the parent ul 
 #myUL {
     margin: 0.5rem;
     padding: 0;
 }
 
-/* Style the caret/arrow */
+ Style the caret/arrow 
 .caret {
     cursor: pointer;
-    user-select: none; /* Prevent text selection */
+    user-select: none;  Prevent text selection 
 }
 
-/* Create the caret/arrow with a unicode, and style it */
+ Create the caret/arrow with a unicode, and style it 
 .caret::before {
     content: "\25B6";
     color: black;
@@ -57,20 +63,20 @@ ul, #myUL {
     margin-right: 6px;
 }
 
-/* Rotate the caret/arrow icon when clicked on (using JavaScript) */
+ Rotate the caret/arrow icon when clicked on (using JavaScript) 
 .caret-down::before {
     transform: rotate(90deg);
 }
 
-/* Hide the nested list */
+ Hide the nested list 
 .nested {
     display: none;
     margin-left: 1.5rem;
     margin-right: 1.5rem;
 }
 
-/* Show the nested list when the user clicks on the caret/arrow (with JavaScript) */
+ Show the nested list when the user clicks on the caret/arrow (with JavaScript) 
 .active {
     display: block;
     margin-left: 10px;
-}
+}*/

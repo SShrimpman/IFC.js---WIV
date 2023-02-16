@@ -8,6 +8,8 @@ const viewer = new IfcViewerAPI({ container, backgroundColor: new Color(0xffffff
 viewer.grid.setGrid();
 viewer.axes.setAxes();
 
+loadIfc('./01.ifc');
+
 async function loadIfc(url) {
 		// Load the model
     const model = await viewer.IFC.loadIfcUrl(url);
@@ -17,5 +19,5 @@ async function loadIfc(url) {
     viewer.context.renderer.postProduction.active = true;
 }
 
-loadIfc('./01.ifc');
-
+window.ondblclick = () => viewer.IFC.selector.pickIfcItem();
+window.onmousemove = () => viewer.IFC.selector.prePickIfcItem();

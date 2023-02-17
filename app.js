@@ -29,5 +29,14 @@ async function loadIfc(url) {
 	// Add dropped shadow and post-processing efect
   await viewer.shadowDropper.renderShadow(model.modelID);
 
-  await viewer.GLTF.load('./police_station.glb');
+  const properties = await viewer.IFC.properties.serializeAllProperties(model);
+
+  const file = new File(properties, 'properties.json');
+
+  const link = document.createElement('a');
+  document.body.appendChild(link);
+  link.download = 'properties.json';
+  link.href = URL.createObjectURL(file);
+  link.click();
+  link.remove();
 }

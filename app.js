@@ -23,23 +23,11 @@ viewer.axes.setAxes();
 loadIfc('./01.ifc');
 
 async function loadIfc(url) {
-		// Load the model
-    model = await viewer.IFC.loadIfcUrl(url);
+	// Load the model
+  const model = await viewer.IFC.loadIfcUrl(url);
 
-		// Add dropped shadow and post-processing efect
-    await viewer.shadowDropper.renderShadow(model.modelID);
-    viewer.context.renderer.postProduction.active = true;
-    
-    viewer.dimensions.active = true;
-    viewer.dimensions.previewActive = true;
+	// Add dropped shadow and post-processing efect
+  await viewer.shadowDropper.renderShadow(model.modelID);
 
-    window.ondblclick = () => {
-      viewer.dimensions.create();
-    }
-
-    window.onkeydown = (event) => {
-      if(event.code === 'Delete'){
-        viewer.dimensions.delete();
-      }
-    }
+  await viewer.GLTF.load('./police_station.glb');
 }

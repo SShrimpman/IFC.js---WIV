@@ -9,11 +9,15 @@ import {
   IFCDOOR,
   IFCWINDOW,
   IFCPLATE,
-  IFCMEMBER
+  IFCMEMBER,
+  IFCFLOWFITTING,
+  IFCFLOWSEGMENT,
+  IFCBUILDINGELEMENTPROXY
 } from 'web-ifc'
 import { LineBasicMaterial } from 'three';
 import { MeshBasicMaterial } from 'three';
 import Drawing from "dxf-writer";
+import {Dexie} from "dexie";
 
 const container = document.getElementById('viewer-container');
 const viewer = new IfcViewerAPI({ container, backgroundColor: new Color(0xffffff) });
@@ -22,116 +26,122 @@ const viewer = new IfcViewerAPI({ container, backgroundColor: new Color(0xffffff
 viewer.grid.setGrid();
 viewer.axes.setAxes();
 
-loadIfc();
+// Get all Buttons
 
-let properties;
+const saveButton = document.getElementById('save-button');
+const loadButton = document.getElementById('load-button');
+const removeButton = document.getElementById('remove-button');
+const input = document.getElementById('file-input');
 
-async function loadIfc() {
-	await viewer.GLTF.loadModel('./result/curtainwalls_Nivel 1.glb');
-  await viewer.GLTF.loadModel('./result/slabs_Nivel 1.glb');
-  await viewer.GLTF.loadModel('./result/slabs_Nivel 2.glb');
-  await viewer.GLTF.loadModel('./result/doors_Nivel 1.glb');
-  await viewer.GLTF.loadModel('./result/windows_Nivel 1.glb');
-  await viewer.GLTF.loadModel('./result/walls_Nivel 1.glb');
 
-  const rawProperties = await fetch('./result/properties.json');
-  properties = await rawProperties.json();
+// Set up button logic
 
-  // Get Spatial tree
-  const tree = await constructSpatialTree();
-  console.log(tree);
+removeButton.onclick = () => removeDatabase();
+loadButton.onclick = () => loadSavedModel();
+saveButton.onclick = () => input.click();
+input.onchange = () => preProcessAndSaveModel();
 
+// Set up what buttons the user can click
+
+updateButtons();
+
+function updateButtons(){
+  const modelsNames = localStorage.getItem('modelsNames');
+
+  if(modelsNames){
+    loadButton.classList.remove('disabled');
+    removeButton.classList.remove('disabled');
+    saveButton.classList.add('disabled');
+  } else {
+    loadButton.classList.add('disabled');
+    removeButton.classList.add('disabled');
+    saveButton.classList.remove('disabled');
+  }
 }
 
-// Get properties of selected item
-window.ondblclick = async () => {
-	const result = await viewer.IFC.selector.pickIfcItem(true);
-	const foundProperties = properties[result.id];
-	getPropertySets(foundProperties);
-	console.log(foundProperties);
-};
-window.onmousemove = () => viewer.IFC.selector.prePickIfcItem();
+// Create a Database
 
-// Utils functions
-function getFirstItemOfType(type) {
-	return Object.values(properties).find(item => item.type === type);
+const db = createOrOpenDatabase();
+
+function createOrOpenDatabase(){
+
+  const db = new Dexie("ModelDatabase");
+
+  db.version(1).stores({
+    bimModels: `
+    name,
+    id,
+    category,
+    level
+    `
+  });
+    return db;
 }
 
-function getAllItemsOfType(type) {
-	return Object.values(properties).filter(item => item.type === type);
+async function preProcessAndSaveModel(){
+  const file = input.files[0];
+  const url = URL.createObjectURL(file);
+
+  const result = await viewer.GLTF.exportIfcFileAsGltf({
+    ifcFileUrl: url,
+    splitByFloors: true,
+    categories:{
+      walls: [IFCWALL, IFCWALLSTANDARDCASE],
+      slabs: [IFCSLAB],
+      windows: [IFCWINDOW],
+      curtainwalls: [ IFCMEMBER, IFCPLATE, IFCCURTAINWALL],
+      doors: [IFCDOOR],
+    }
+  });
+
+  const models= [];
+
+  for(const categoryName in result.gltf){
+    const category = result.gltf[categoryName];
+    for(const levelName in category){
+      const file = category[levelName].file;
+      if(file){
+
+        const data = await file.arrayBuffer();
+
+        models.push({
+          name: result.id + categoryName + levelName,
+          id: result.id,
+          category: categoryName,
+          level: levelName,
+          file: data
+        })
+      }
+    }
+  }
+
+  await db.bimModels.bulkPut(models);
+
+  const names = models.map(model => model.name)
+  const serializedNames = JSON.stringify(names);
+  localStorage.setItem("modelsNames", serializedNames);
+  location.reload();
 }
 
-// Get spatial tree
-async function constructSpatialTree() {
-	const ifcProject = getFirstItemOfType('IFCPROJECT');
+async function loadSavedModel(){
+  const serializedNames = localStorage.getItem("modelsNames");
+  const names = JSON.parse(serializedNames);
 
-	const ifcProjectNode = {
-		expressID: ifcProject.expressID,
-		type: 'IFCPROJECT',
-		children: [],
-	};
+  for(const name of names){
+    const savedModel = await db.bimModels.where("name").equals(name).toArray();
 
-	const relContained = getAllItemsOfType('IFCRELAGGREGATES');
-	const relSpatial = getAllItemsOfType('IFCRELCONTAINEDINSPATIALSTRUCTURE');
+    const data = savedModel[0].file;
+    const file = new File([data], 'example');
+    const url = URL.createObjectURL(file);
+    await viewer.GLTF.loadModel(url);
+  }
 
-	await constructSpatialTreeNode(
-		ifcProjectNode,
-		relContained,
-		relSpatial,
-	);
-
-	return ifcProjectNode;
-
+  loadButton.classList.add('disabled');
 }
 
-// Recursively constructs the spatial tree
-async function constructSpatialTreeNode(
-	item,
-	contains,
-	spatials,
-) {
-	const spatialRels = spatials.filter(
-		rel => rel.RelatingStructure === item.expressID,
-	);
-	const containsRels = contains.filter(
-		rel => rel.RelatingObject === item.expressID,
-	);
 
-	const spatialRelsIDs = [];
-	spatialRels.forEach(rel => spatialRelsIDs.push(...rel.RelatedElements));
-
-	const containsRelsIDs = [];
-	containsRels.forEach(rel => containsRelsIDs.push(...rel.RelatedObjects));
-
-	const childrenIDs = [...spatialRelsIDs, ...containsRelsIDs];
-
-	const children = [];
-	for (let i = 0; i < childrenIDs.length; i++) {
-		const childID = childrenIDs[i];
-		const props = properties[childID];
-		const child = {
-			expressID: props.expressID,
-			type: props.type,
-			children: [],
-		};
-
-		await constructSpatialTreeNode(child, contains, spatials);
-		children.push(child);
-	}
-
-	item.children = children;
-}
-
-// Gets the property sets
-
-function getPropertySets(props) {
-	const id = props.expressID;
-	const propertyValues = Object.values(properties);
-	const allPsetsRels = propertyValues.filter(item => item.type === 'IFCRELDEFINESBYPROPERTIES');
-	const relatedPsetsRels = allPsetsRels.filter(item => item.RelatedObjects.includes(id));
-	const psets = relatedPsetsRels.map(item => properties[item.RelatingPropertyDefinition]);
-	for(let pset of psets) {
-		pset.HasProperty = pset.HasProperties.map(id => properties[id]);
-	}
-	props.psets = psets;
+function removeDatabase(){
+  localStorage.removeItem('modelsNames');
+  db.delete();
+  location.reload();
 }

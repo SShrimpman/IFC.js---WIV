@@ -26,122 +26,71 @@ const viewer = new IfcViewerAPI({ container, backgroundColor: new Color(0xffffff
 viewer.grid.setGrid();
 viewer.axes.setAxes();
 
-// Get all Buttons
+loadIfc("./01.ifc");
 
-const saveButton = document.getElementById('save-button');
-const loadButton = document.getElementById('load-button');
-const removeButton = document.getElementById('remove-button');
-const input = document.getElementById('file-input');
+async function loadIfc(url) {
+  const model = await viewer.IFC.loadIfcUrl(url);
+  await viewer.shadowDropper.renderShadow(model.modelID);
+  viewer.context.renderer.postProduction.active = true;
 
+  const walls = await viewer.IFC.getAllItemsOfType(model.modelID, IFCWALLSTANDARDCASE, true);
 
-// Set up button logic
+  const table = document.getElementById('bim-table');
+  const body = table.querySelector('tbody');
 
-removeButton.onclick = () => removeDatabase();
-loadButton.onclick = () => loadSavedModel();
-saveButton.onclick = () => input.click();
-input.onchange = () => preProcessAndSaveModel();
+  for(const wall of walls) {
+    createWallNameEntry(body, wall);
 
-// Set up what buttons the user can click
-
-updateButtons();
-
-function updateButtons(){
-  const modelsNames = localStorage.getItem('modelsNames');
-
-  if(modelsNames){
-    loadButton.classList.remove('disabled');
-    removeButton.classList.remove('disabled');
-    saveButton.classList.add('disabled');
-  } else {
-    loadButton.classList.add('disabled');
-    removeButton.classList.add('disabled');
-    saveButton.classList.remove('disabled');
-  }
-}
-
-// Create a Database
-
-const db = createOrOpenDatabase();
-
-function createOrOpenDatabase(){
-
-  const db = new Dexie("ModelDatabase");
-
-  db.version(1).stores({
-    bimModels: `
-    name,
-    id,
-    category,
-    level
-    `
-  });
-    return db;
-}
-
-async function preProcessAndSaveModel(){
-  const file = input.files[0];
-  const url = URL.createObjectURL(file);
-
-  const result = await viewer.GLTF.exportIfcFileAsGltf({
-    ifcFileUrl: url,
-    splitByFloors: true,
-    categories:{
-      walls: [IFCWALL, IFCWALLSTANDARDCASE],
-      slabs: [IFCSLAB],
-      windows: [IFCWINDOW],
-      curtainwalls: [ IFCMEMBER, IFCPLATE, IFCCURTAINWALL],
-      doors: [IFCDOOR],
-    }
-  });
-
-  const models= [];
-
-  for(const categoryName in result.gltf){
-    const category = result.gltf[categoryName];
-    for(const levelName in category){
-      const file = category[levelName].file;
-      if(file){
-
-        const data = await file.arrayBuffer();
-
-        models.push({
-          name: result.id + categoryName + levelName,
-          id: result.id,
-          category: categoryName,
-          level: levelName,
-          file: data
-        })
-      }
+    for(const propertyName in wall){
+      const propertyValue = wall[propertyName];
+      createPropertyEntry(body, propertyName, propertyValue);
     }
   }
 
-  await db.bimModels.bulkPut(models);
+  const exportButton = document.getElementById('export');
+  exportButton.onclick = () => {
+    const book = XLSX.utils.table_to_book(table);
+    XLSX.writeFile(book, 'Walls_Table.xlsx');
 
-  const names = models.map(model => model.name)
-  const serializedNames = JSON.stringify(names);
-  localStorage.setItem("modelsNames", serializedNames);
-  location.reload();
-}
-
-async function loadSavedModel(){
-  const serializedNames = localStorage.getItem("modelsNames");
-  const names = JSON.parse(serializedNames);
-
-  for(const name of names){
-    const savedModel = await db.bimModels.where("name").equals(name).toArray();
-
-    const data = savedModel[0].file;
-    const file = new File([data], 'example');
-    const url = URL.createObjectURL(file);
-    await viewer.GLTF.loadModel(url);
   }
-
-  loadButton.classList.add('disabled');
 }
 
+function createWallNameEntry(tableBody, wall){
+  const row = document.createElement('tr');
+  tableBody.appendChild(row);
 
-function removeDatabase(){
-  localStorage.removeItem('modelsNames');
-  db.delete();
-  location.reload();
+  const wallName = document.createElement('td');
+  wallName.colSpan = 2;
+  wallName.textContent = 'Wall' + wall.GlobalId.value;
+  row.appendChild(wallName);
+}
+
+function createPropertyEntry(tableBody, name, value){
+  const row = document.createElement('tr');
+  tableBody.appendChild(row);
+
+  const propertyName = document.createElement('td');
+  name = decodeIFCString(name);
+  propertyName.textContent = name;
+  row.appendChild(propertyName);
+
+  if( value === null || value === undefined) value = "Unknown";
+  if (value.value) value = value.value;
+  value = decodeIFCString(value);
+
+  const propertyValue = document.createElement('td');
+  propertyValue.textContent = value;
+  row.appendChild(propertyValue);
+}
+
+function decodeIFCString (ifcString) {
+  const ifcUnicodeRegEx = /\\X2\\(.*?)\\X0\\/uig;
+  let resultString = ifcString;
+  let match = ifcUnicodeRegEx.exec (ifcString);
+  while (match){
+    const unicodeChar = String.fromCharCode (parseInt(match[1], 16));
+    resultString = resultString.replace(match[0], unicodeChar);
+    match = ifcUnicodeRegEx.exec (ifcString);
+  }
+  return resultString;
 }
